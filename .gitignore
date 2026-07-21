@@ -1,0 +1,26 @@
+# Data — too large for Git
+data/raw/
+data/processed/
+
+# Model checkpoints — too large
+experiments/checkpoints/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+.ipynb_checkpoints/
+
+# Environment
+nilm_env_310/
+*.egg-info/
+
+# VS Code
+.vscode/
+
+# Results — keep only final ones
+experiments/results/*.tmp
+
+# OS
+.DS_Store
+Thumbs.db
