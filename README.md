@@ -1,6 +1,6 @@
 # NILM Benchmarking
 
-Institution: ACTIA ES / PowerLab
+Institution: ACTIA ES
 Year: 2026-2027
 
 ## Datasets
