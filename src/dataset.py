@@ -1,5 +1,5 @@
 """
-dataset.py — PyTorch Dataset for NILM Seq2Point Learning
+dataset.py : PyTorch Dataset for NILM Seq2Point Learning
 =========================================================
 Bridges the preprocessing pipeline and the neural network training loop.
 
@@ -33,9 +33,6 @@ Key design decisions (engineering rationale):
 4. SEQ2POINT labels.
    Each window of 480 aggregate points predicts power + ON/OFF state
    of every appliance at the CENTER timestep only (Luo et al., 2023).
-
-Author  : Chadha Jeddi
-Project : Benchmarking DL Models for NILM — ACTIA ES / PowerLab
 """
 
 from __future__ import annotations
@@ -230,6 +227,7 @@ class NILMDataset(Dataset):
         stride: int = TRAIN_STRIDE,
         sampling_seconds: int = 6,
         apply_dwt: bool = True,
+        add_temporal_features: bool = True
     ) -> None:
         super().__init__()
         self.window_size = window_size
@@ -239,6 +237,8 @@ class NILMDataset(Dataset):
 
         # ---- extract numpy arrays once (fast __getitem__ later) ----
         self.aggregate = df["aggregate"].to_numpy(dtype=np.float32)
+        self.timestamps = df.index                      
+        self.add_temporal_features = add_temporal_features
 
         self.power = np.stack(
             [df[a].to_numpy(dtype=np.float32) for a in APPLIANCE_NAMES],
@@ -284,6 +284,18 @@ class NILMDataset(Dataset):
             x = dwt_transform(window)              # (4, 480) float32
         else:
             x = window[np.newaxis, :].astype(np.float32)  # (1, 480)
+
+        # ---- Temporal feature injection (inspired by NILMFormer TimeRPE) ----
+        # Encodes hour-of-day as sin/cos for each timestep in the window.
+        # Gives BiGRU awareness of daily appliance usage patterns:
+        # kettle at 7am breakfast vs 11pm : completely different contexts.
+        if self.add_temporal_features:
+            ts = self.timestamps[start:end]
+            hours = (ts.hour + ts.minute / 60.0).to_numpy().astype(np.float32)
+            hour_sin = np.sin(2 * np.pi * hours / 24)  # (480,)
+            hour_cos = np.cos(2 * np.pi * hours / 24)  # (480,)
+            temporal = np.stack([hour_sin, hour_cos], axis=0)  # (2, 480)
+            x = np.concatenate([x, temporal], axis=0)  # (6, 480)    
 
         # ---- targets at the CENTER point (seq2point) ----
         y_power = self.power[center] / self.app_max     # scaled to [0,1]
@@ -448,7 +460,7 @@ if __name__ == "__main__":
     x, y_power, y_state = next(iter(train_loader))
     print(f"[4] Batch shapes: x={tuple(x.shape)}, "
           f"y_power={tuple(y_power.shape)}, y_state={tuple(y_state.shape)}")
-    assert x.shape[1:] == (4, WINDOW_SIZE)
+    assert x.shape[1:] in [(4, WINDOW_SIZE), (6, WINDOW_SIZE)], f"Unexpected shape: {x.shape}"
     assert y_power.shape[1] == len(APPLIANCE_NAMES)
     assert float(y_power.max()) <= 1.0 + 1e-6, "power targets must be in [0,1]"
 
@@ -465,7 +477,7 @@ if __name__ == "__main__":
     ds_raw = NILMDataset(train_df, stats, stride=10, apply_dwt=False)
     x_raw, _, _ = ds_raw[0]
     print(f"[6] Ablation (apply_dwt=False) input shape: {tuple(x_raw.shape)}")
-    assert x_raw.shape == (1, WINDOW_SIZE)
+    assert x_raw.shape in [(1, WINDOW_SIZE), (3, WINDOW_SIZE)], f"Unexpected shape: {x_raw.shape}"
 
     # ---- stats persistence ----
     p = DATA_PROCESSED_DIR / "_selftest_stats.json"

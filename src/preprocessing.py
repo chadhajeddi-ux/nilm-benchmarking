@@ -14,9 +14,6 @@ Supported formats:
 Appliance meter mapping (UK-DALE):
     Verified empirically via duty-cycle analysis against official
     UK-DALE documentation (Kelly & Knottenbelt, 2015).
-
-Author  : Chadha Jeddi
-Project : Benchmarking DL Models for NILM 
 """
 
 import warnings

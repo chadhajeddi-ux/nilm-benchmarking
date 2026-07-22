@@ -1,12 +1,8 @@
 """
-config.py — Central Configuration for NILM Benchmarking Project
+config.py : Central Configuration for NILM Benchmarking Project
 ================================================================
 All project constants live here. Every other file imports from this module.
 Change a value here → it updates everywhere automatically.
-
-Author  : Chadha Jeddi
-Project : Benchmarking  Models for NILM 
-Year    : 2026-2027
 """
 
 import os
@@ -153,7 +149,7 @@ WINDOW_DURATION_MIN = (WINDOW_SIZE * SAMPLING_RATE) / 60  # = 48.0 minutes
 # stride=WINDOW_SIZE → no overlap → fewest examples (faster but less data)
 TRAIN_STRIDE = 1             # maximum data augmentation for training
 TEST_STRIDE = 1              # every timestep gets a prediction for evaluation
-
+EVAL_STRIDE = WINDOW_SIZE  
 # Gap filling: forward-fill missing values if gap < MAX_GAP_SECONDS
 MAX_GAP_SECONDS = 180        # 3 minutes, following Mamba-ECA-UNet paper
 
@@ -164,7 +160,8 @@ MAX_GAP_SECONDS = 180        # 3 minutes, following Mamba-ECA-UNet paper
 # These are starting values. Tuned via hyperparameter search on Day 12.
 
 # --- Shared across all models ---
-INPUT_CHANNELS = DWT_N_SUBBANDS  # 4 channels (one per DWT sub-band)
+INPUT_CHANNELS = DWT_N_SUBBANDS + 2  # 4 DWT sub-bands + 2 temporal (sin/cos hour)
+INPUT_CHANNELS_NO_TEMPORAL = DWT_N_SUBBANDS  # for ablation without temporal features# 4 channels (one per DWT sub-band)
 SEQ_LENGTH = WINDOW_SIZE         # 480 timesteps
 
 # --- Your proposed model: DWT-BiGRU-Lite-CBAM(T)-DyT ---
