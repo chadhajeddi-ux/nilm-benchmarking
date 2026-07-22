@@ -5,7 +5,7 @@ All project constants live here. Every other file imports from this module.
 Change a value here → it updates everywhere automatically.
 
 Author  : Chadha Jeddi
-Project : Benchmarking DL Models for NILM — ACTIA ES / PowerLab
+Project : Benchmarking  Models for NILM 
 Year    : 2026-2027
 """
 
@@ -51,7 +51,7 @@ DATASETS = {
         "test_house": 1,              # Leave-One-House-Out: house 1 for testing
     },
     "UK-DALE": {
-        "path": DATA_RAW_DIR / "UK-DALE",
+        "path": DATA_RAW_DIR / "UKDALE",
         "sampling_rate": 6,           # already at 6 seconds
         "target_sampling_rate": 6,
         "houses": [1, 2, 3, 4, 5],
@@ -63,6 +63,13 @@ DATASETS = {
         "target_sampling_rate": 6,    # upsample to 6 seconds (interpolation)
         "houses": [1],                # AMPds has only 1 house
         "test_house": 1,
+    },
+    "REFIT": {
+        "path": DATA_RAW_DIR / "REFIT",
+        "sampling_rate": 8,           # 8-second intervals
+        "target_sampling_rate": 6,    # resample to 6 seconds
+        "houses": list(range(1, 21)), # 20 houses
+        "test_house": 2,
     },
 }
 
