@@ -39,9 +39,6 @@ Why GRU instead of LSTM:
     performance on NILM tasks (validated by SAED paper Table 1:
     WGRU 270K params achieves similar F1 to larger models).
     GRU is also more NPU-friendly due to simpler gate structure.
-
-Author  : Chadha Jeddi
-Project : Benchmarking DL Models for NILM — ACTIA ES / PowerLab
 """
 
 import torch

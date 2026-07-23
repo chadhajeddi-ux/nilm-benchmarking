@@ -1,21 +1,21 @@
-# GRU Baseline — NILM Seq2Point
+# GRU Baseline  : NILM Seq2Point
 
 ## References
 
-### Primary — WGRU Architecture
+### Primary  : WGRU Architecture
 **Paper:** Sliding Window Approach for Online Energy Disaggregation Using Artificial Neural Networks
 **Authors:** Odysseas Krystalakos, Christoforos Nalmpantis, Dimitris Vrakas
 **Conference:** HellAI 2018 (10th Hellenic Conference on Artificial Intelligence)
 **GitHub (original):** https://github.com/Virtsionis/SelfAttentiveEnergyDisaggregator
 
-### Validation — SAED Benchmark
+### Validation :  SAED Benchmark
 **Paper:** SAED: Self-Attentive Energy Disaggregation
 **Authors:** Nikolaos Virtsionis Gkalinikis, Christoforos Nalmpantis, Dimitris Vrakas
 **Journal:** Machine Learning, Springer, 2021
 **DOI:** https://doi.org/10.1007/s10994-021-06106-3
 **GitHub:** https://github.com/Virtsionis/SelfAttentiveEnergyDisaggregator
 
-### Supplementary — LSTM Feedback Structure
+### Supplementary :  LSTM Feedback Structure
 **Paper:** Nonintrusive Load Monitoring Using an LSTM with Feedback Structure
 **Authors:** Hyeontaek Hwang, Sanggil Kang
 **Journal:** IEEE Transactions on Instrumentation and Measurement, 2022
@@ -71,7 +71,7 @@ For each appliance k (k = 1..5):
 
 ---
 
-## GRU vs LSTM — Why GRU is a Valid Separate Baseline
+## GRU vs LSTM :  Why GRU is a Valid Separate Baseline
 
 | Property | GRU | LSTM |
 |---|---|---|
@@ -123,7 +123,7 @@ the "fridge is ON" information forward unchanged.
 Following WGRU architecture. Conv1D extracts local patterns from
 the DWT sub-bands (shapes, edges, oscillations) before GRU
 integrates them temporally. Without Conv1D, the GRU would process
-raw sub-band values — less informative and harder to learn from.
+raw sub-band values ,  less informative and harder to learn from.
 
 ### 2. Unidirectional (forward only)
 This baseline uses unidirectional GRU to represent the standard
@@ -140,7 +140,7 @@ This is more consistent across all baselines in our benchmark.
 ### 4. Hidden size 128
 WGRU original uses 64 hidden units per GRU layer. We use 128 for
 fair comparison with BiLSTM (which also uses 128). The SAED paper
-shows WGRU with 270K parameters — our 128-hidden GRU is comparable.
+shows WGRU with 270K parameters ,  our 128-hidden GRU is comparable.
 
 ---
 
@@ -156,7 +156,7 @@ shows WGRU with 270K parameters — our 128-hidden GRU is comparable.
 | State heads (64→1) × 5 | 325 |
 | **Total** | **~184K** |
 
-INT8 size: ~0.184 MB — easily deployable on STM32MP2 NPU.
+INT8 size: ~0.184 MB  , easily deployable on STM32MP2 NPU.
 
 ---
 
