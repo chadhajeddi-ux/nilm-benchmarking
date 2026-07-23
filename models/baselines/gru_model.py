@@ -46,7 +46,7 @@ import torch.nn as nn
 from pathlib import Path
 import sys
 
-sys.path.append(str(Path(__file__).resolve().parent.parent / "src"))
+sys.path.append(str(Path(__file__).resolve().parent.parent.parent / "src"))
 from config import (
     WINDOW_SIZE,
     INPUT_CHANNELS,
