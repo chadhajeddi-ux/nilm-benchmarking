@@ -1,5 +1,5 @@
 """
-gru_model.py — GRU Baseline for NILM (seq2point)
+gru_model.py :  GRU Baseline for NILM (seq2point)
 ==================================================
 Architecture based on Window-GRU (WGRU):
     Krystalakos et al. "Sliding Window Approach for Online Energy
@@ -18,7 +18,7 @@ Architecture based on Window-GRU (WGRU):
 Modifications from original WGRU:
     - Input: (6, 480) with 4 DWT sub-bands + 2 temporal features
       instead of (1, 50-100) raw power only
-    - Unidirectional GRU (not bidirectional) — this file is the
+    - Unidirectional GRU (not bidirectional) , this file is the
       GRU baseline. BiLSTM baseline is a separate file.
     - Multi-task output: power + state per appliance (N heads)
     - Gated output: ŷ = p̂ × σ(ŝ_logit) for physical consistency

@@ -1,5 +1,5 @@
 """
-nilmformer_model.py — NILMFormer (GPU only, non-deployable on NPU)
+nilmformer_model.py  : NILMFormer (GPU only, non-deployable on NPU)
 ===================================================================
 Adapted from official NILMFormer source code:
     Petralia et al. "NILMFormer: Non-Intrusive Load Monitoring
@@ -10,7 +10,7 @@ Adapted from official NILMFormer source code:
 
 IMPORTANT — DEPLOYMENT STATUS:
     ❌ NOT DEPLOYABLE on STM32MP2 NPU
-    Reason 1: Self-attention O(T²) complexity — 480×480 matrix
+    Reason 1: Self-attention O(T²) complexity , 480×480 matrix
                requires ~900KB RAM at FP32 (exceeds 2MB budget with
                other activations)
     Reason 2: xformers.ops.memory_efficient_attention uses a custom
@@ -44,9 +44,6 @@ Architecture overview:
         ↓  Conv1D head → (B, 480, c_out)
         ↓  Reverse instance normalization via ProjStats2
         ↓  Take center timestep → N multi-task heads
-
-Author  : Chadha Jeddi (adapted from Petralia et al. ©2025 EDF)
-Project : Benchmarking DL Models for NILM — ACTIA ES / PowerLab
 """
 
 import numpy as np

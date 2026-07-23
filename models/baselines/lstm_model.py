@@ -1,5 +1,5 @@
 """
-lstm_model.py — LSTM Baseline for NILM (seq2point)
+lstm_model.py  :  LSTM Baseline for NILM (seq2point)
 ====================================================
 Architecture based on:
     Hwang & Kang. "Nonintrusive Load Monitoring Using an LSTM
@@ -10,16 +10,13 @@ Architecture based on:
     Disaggregation by Using a Deep Recurrent LSTM Network."
     IEEE GlobalSIP 2015.
 
-Unidirectional LSTM baseline — provides temporal context
+Unidirectional LSTM baseline  ,  provides temporal context
 from past only (positions 0→center). Compare against BiLSTM
 to quantify the value of future context at the center point.
 
 Architecture:
     Conv1d(6→16, k=4, same) → LSTM(16→64) → LSTM(64→128)
     → center slice → Dense(128→64) → MultiTaskHeads
-
-Author  : Chadha Jeddi
-Project : Benchmarking DL Models for NILM — ACTIA ES / PowerLab
 """
 
 import torch

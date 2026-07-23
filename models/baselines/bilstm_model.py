@@ -1,5 +1,5 @@
 """
-bilstm_model.py — BiLSTM Baseline for NILM (seq2point)
+bilstm_model.py  : BiLSTM Baseline for NILM (seq2point)
 ========================================================
 EXACT architecture from NILMFormer official source code:
     Kelly & Knottenbelt. "Neural NILM: Deep Neural Networks Applied
@@ -24,9 +24,6 @@ Our adaptations:
     2. Seq2point: center timestep vs seq2seq all timesteps
     3. Multi-task N=5 appliances vs single appliance output
     4. Gated output: ŷ = p̂ × σ(ŝ)
-
-Author  : Chadha Jeddi
-Project : Benchmarking DL Models for NILM — ACTIA ES / PowerLab
 """
 
 import torch

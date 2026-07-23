@@ -1,12 +1,12 @@
 """
-cnn_lstm_model.py — CNN-LSTM Baseline for NILM (seq2point)
+cnn_lstm_model.py :  CNN-LSTM Baseline for NILM (seq2point)
 ============================================================
 Architecture based on:
     Luo et al. "A Multi-Task Learning Model for NILM Based on
     Discrete Wavelet Transform." Journal of Supercomputing, 2023.
     DOI: https://doi.org/10.1007/s11227-022-05000-6
 
-    This is the closest baseline to our proposed model — it uses
+    This is the closest baseline to our proposed model , it uses
     the same Conv+LSTM pattern but without DWT preprocessing,
     bidirectionality, attention, or DyT normalization.
 
@@ -21,11 +21,8 @@ Architecture:
     Center slice → Dense → MultiTaskHeads
 
 The CNN-LSTM hybrid is the most natural extension of both CNN and
-LSTM baselines — CNN extracts local features, LSTM models temporal
+LSTM baselines ,  CNN extracts local features, LSTM models temporal
 dependencies across compressed representations.
-
-Author  : Chadha Jeddi
-Project : Benchmarking DL Models for NILM — ACTIA ES / PowerLab
 """
 
 import torch
