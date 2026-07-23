@@ -42,6 +42,9 @@ Architecture overview:
         ↓  Take center timestep [:, 240, :]  → (B, 256)
         ↓  Linear(256→64) + ReLU + Dropout
         ↓  N × [power head | state head] → gated output
+
+Author  : Chadha Jeddi
+Project : Benchmarking DL Models for NILM — ACTIA ES / PowerLab
 """
 
 import torch

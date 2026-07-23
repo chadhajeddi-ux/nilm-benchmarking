@@ -1,8 +1,8 @@
-# BiGRU Baseline : NILM Seq2Point
+# BiGRU Baseline — NILM Seq2Point
 
 ## References
 
-### Primary : BiGRU NILM Architecture
+### Primary — BiGRU NILM Architecture
 **Paper:** Bidirectional GRU with Convolutional Layers for NILM
 **Authors:** Precioso Garcelán, D.; Gomez-Ullate, D.
 **Year:** 2023
@@ -10,7 +10,7 @@
 **arXiv:** https://arxiv.org/abs/2506.05880
 **GitHub:** https://github.com/adrienpetralia/NILMFormer
 
-### Supporting  : GRU Bidirectional Transformer for NILM
+### Supporting — GRU Bidirectional Transformer for NILM
 **Paper:** Load Energy Decomposition Algorithm Based on Improved
 Bidirectional Transformer Combined With Time-Sensing Self-Attention
 **Authors:** Yang Xuan, Chengxin Pang, Haimeng Yu, Xinhua Zeng, Yongbo Chen
@@ -65,7 +65,7 @@ For each appliance k (k = 1..5):
 
 ---
 
-## BiGRU vs GRU :  The Critical Difference
+## BiGRU vs GRU — The Critical Difference
 
 ```
                     Position 0    Center (240)    Position 480
@@ -81,7 +81,7 @@ BiGRU (bidirectional):
 ```
 
 For seq2point with window=480, the center point is position 240.
-BiGRU makes FULL use of the entire window ,  the key theoretical
+BiGRU makes FULL use of the entire window — the key theoretical
 advantage that seq2point learning was designed to exploit.
 
 ---
@@ -117,13 +117,13 @@ BiGRU output at center t=240:
 | State heads (64→1) × 5 | 325 |
 | **Total** | **~366K** |
 
-INT8 size: ~0.366 MB , deployable on STM32MP2 NPU.
+INT8 size: ~0.366 MB — deployable on STM32MP2 NPU.
 Note: ~2× more parameters than GRU (366K vs 184K) due to
-bidirectional processing , each GRU direction has its own weights.
+bidirectional processing — each GRU direction has its own weights.
 
 ---
 
-## Reference Numbers : NILMFormer Table 2
+## Reference Numbers — NILMFormer Table 2
 
 From Petralia et al. (KDD 2025), BiGRU baseline on UK-DALE:
 
