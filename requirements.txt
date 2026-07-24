@@ -1,0 +1,39 @@
+# NILM Benchmarking Project — Python Dependencies
+# Install: pip install -r requirements.txt
+#
+# For GPU training (Colab/Kaggle): torch is pre-installed
+# For local CPU testing: pip install torch --index-url https://download.pytorch.org/whl/cpu
+
+# Core deep learning
+torch>=2.0.0
+torchinfo>=1.8.0
+
+# Signal processing
+PyWavelets>=1.4.0
+
+# Data handling
+numpy>=1.24.0
+pandas>=2.0.0
+pyarrow>=12.0.0       # for parquet caching
+h5py>=3.8.0           # for reading .h5 dataset files
+
+# Scientific computing
+scipy>=1.10.0
+scikit-learn>=1.3.0
+
+# Visualization
+matplotlib>=3.7.0
+seaborn>=0.12.0
+
+# Utilities
+tqdm>=4.65.0
+einops>=0.6.0
+omegaconf>=2.3.0
+
+# Model export
+onnx>=1.14.0
+onnxruntime>=1.15.0
+
+# Jupyter
+ipykernel>=6.0.0
+notebook>=7.0.0

@@ -230,7 +230,6 @@ class NILMDataset(Dataset):
         stride: int = TRAIN_STRIDE,
         sampling_seconds: int = 6,
         apply_dwt: bool = True,
-        add_temporal_features: bool = True,
     ) -> None:
         super().__init__()
         self.window_size = window_size
@@ -240,8 +239,6 @@ class NILMDataset(Dataset):
 
         # ---- extract numpy arrays once (fast __getitem__ later) ----
         self.aggregate = df["aggregate"].to_numpy(dtype=np.float32)
-        self.timestamps = df.index
-        self.add_temporal_features = add_temporal_features
 
         self.power = np.stack(
             [df[a].to_numpy(dtype=np.float32) for a in APPLIANCE_NAMES],
@@ -287,14 +284,6 @@ class NILMDataset(Dataset):
             x = dwt_transform(window)              # (4, 480) float32
         else:
             x = window[np.newaxis, :].astype(np.float32)  # (1, 480)
-
-        if self.add_temporal_features:
-            ts = self.timestamps[start:end]
-            hours = (ts.hour + ts.minute / 60.0).to_numpy().astype(np.float32)
-            hour_sin = np.sin(2 * np.pi * hours / 24)
-            hour_cos = np.cos(2 * np.pi * hours / 24)
-            temporal = np.stack([hour_sin, hour_cos], axis=0)
-            x = np.concatenate([x, temporal], axis=0)
 
         # ---- targets at the CENTER point (seq2point) ----
         y_power = self.power[center] / self.app_max     # scaled to [0,1]
@@ -378,7 +367,6 @@ def build_dataloaders(
     val_stride: int = TEST_STRIDE,
     num_workers: int = 4,
     apply_dwt: bool = True,
-    add_temporal_features: bool = True,
 ) -> Tuple[DataLoader, DataLoader, NormStats]:
     """
     Build train + validation DataLoaders with leakage-safe normalization.
@@ -391,11 +379,9 @@ def build_dataloaders(
     stats = NormStats.from_train_series(train_df["aggregate"].to_numpy())
 
     train_ds = NILMDataset(train_df, stats, stride=train_stride,
-                           apply_dwt=apply_dwt,
-                           add_temporal_features=add_temporal_features)
+                           apply_dwt=apply_dwt)
     val_ds = NILMDataset(val_df, stats, stride=val_stride,
-                         apply_dwt=apply_dwt,
-                         add_temporal_features=add_temporal_features)
+                         apply_dwt=apply_dwt)
 
     g = torch.Generator()
     g.manual_seed(SEED)  # reproducible shuffling

@@ -1,13 +1,13 @@
 """
-preprocessing.py : Data Loading and Cleaning for NILM Datasets
+preprocessing.py  : Data Loading and Cleaning for NILM Datasets
 =================================================================
 Loads raw power data from UK-DALE, REDD, AMPds2, and REFIT datasets,
 applies resampling, gap-filling, and normalization, producing clean
 aggregate + appliance power series ready for windowing.
 
 Supported formats:
-    UK-DALE : pandas HDFStore (.h5) — NILMTK format
-    REDD    : pandas HDFStore (.h5) — NILMTK format
+    UK-DALE : pandas HDFStore (.h5) :  NILMTK format
+    REDD    : pandas HDFStore (.h5) :  NILMTK format
     AMPds2  : CSV files (after unzip)
     REFIT   : CSV files (after 7z extraction)
 
@@ -152,7 +152,7 @@ def load_ukdale_house(
                    'dishwasher', 'microwave']
         Index: timestamp (timezone-aware, Europe/London).
         Missing appliances (not monitored in that house) are filled
-        with NaN columns — handled later by fill_missing_appliance().
+        with NaN columns ,  handled later by fill_missing_appliance().
 
     Example
     -------
@@ -161,7 +161,7 @@ def load_ukdale_house(
     ['aggregate', 'kettle', 'fridge', 'washing_machine', 'dishwasher', 'microwave']
     """
     if h5_path is None:
-        h5_path = Path.home() / "nilm_project" / "data" / "raw" / "UKDALE" / "ukdale.h5"
+        h5_path = DATASETS["UK-DALE"]["path"] / "ukdale.h5"
 
     if house not in UKDALE_METER_MAP:
         raise ValueError(f"House {house} not in UKDALE_METER_MAP. "
@@ -192,26 +192,14 @@ def load_ukdale_house(
 
     # Add missing appliance columns as all-NaN so downstream code
     # always sees the same column structure.
-    print("  Resampling each series to 6s before joining...")
-    resampled_dict = {}
-    for appliance, series in series_dict.items():
-        if series is not None:
-            # Remove timezone info — avoids alignment edge cases
-            series.index = series.index.tz_localize(None)
-            resampled = series.resample("6s").mean()
-            resampled_dict[appliance] = resampled
-            print(f"    {appliance}: {len(resampled)} points after resample")
-
-    # Now join on common aligned index — fast
-    df = pd.DataFrame(resampled_dict)
-
-    # Add missing appliance columns as NaN
     for appliance in ["aggregate"] + APPLIANCE_NAMES:
         if appliance not in df.columns:
             df[appliance] = np.nan
 
-    return df[["aggregate"] + APPLIANCE_NAMES]
+    # Reorder columns consistently
+    df = df[["aggregate"] + APPLIANCE_NAMES]
 
+    return df
 
 
 # ============================================================
@@ -222,7 +210,7 @@ def load_ukdale_house(
 
 REDD_METER_MAP: Dict[int, Dict[str, object]] = {
     1: {
-        "aggregate": [1, 2],     # REDD splits mains into 2 phases — sum them
+        "aggregate": [1, 2],     # REDD splits mains into 2 phases ,  sum them
         "kettle": None,          # REDD does not have a dedicated kettle meter
         "fridge": 5,
         "washing_machine": 20,
@@ -252,7 +240,7 @@ def load_redd_house(house: int, h5_path: Optional[Path] = None) -> pd.DataFrame:
     240V split-phase electrical system, unlike UK-DALE's single mains.
     """
     if h5_path is None:
-        h5_path = Path.home() / "nilm_project" / "data" / "raw" / "REDD" / "redd.h5"
+        h5_path = DATASETS["REDD"]["path"] / "redd.h5"
 
     if house not in REDD_METER_MAP:
         raise ValueError(f"House {house} not in REDD_METER_MAP.")
@@ -372,7 +360,7 @@ def clip_outliers(
     df : pd.DataFrame
         Columns: aggregate + appliance names.
     appliance_config : dict
-        From config.APPLIANCES — contains max_power per appliance.
+        From config.APPLIANCES  ,  contains max_power per appliance.
 
     Returns
     -------
@@ -413,7 +401,7 @@ def compute_state_labels(
     df : pd.DataFrame
         Must contain appliance power columns.
     appliance_config : dict
-        From config.APPLIANCES — contains power_threshold per appliance.
+        From config.APPLIANCES  ,  contains power_threshold per appliance.
 
     Returns
     -------
@@ -438,7 +426,7 @@ def compute_state_labels(
 
 
 # ============================================================
-# 6. COMPLETE PIPELINE — ONE FUNCTION TO RULE THEM ALL
+# 6. COMPLETE PIPELINE  : ONE FUNCTION TO RULE THEM ALL
 # ============================================================
 
 def preprocess_house(
@@ -502,6 +490,153 @@ def preprocess_house(
     print(f"  Final shape: {df.shape}")
 
     return df
+
+
+
+# ============================================================
+# 5. LOAD AMPds2 (CSV format, 60-second intervals)
+# ============================================================
+# AMPds2 structure:
+#   Electricity/Sub_meter_data/
+#       Electricity_WHE.csv  -- whole-house aggregate
+#       Electricity_DWE.csv  -- dishwasher
+#       Electricity_CWE.csv  -- clothes washer
+#       Electricity_FGE.csv  -- fridge
+# Each CSV: unix_ts,V,I,f,DPF,APF,P,Pt,Q,Qt,S,St
+# Column P = active power in Watts
+# Sampling: 60 seconds -> resampled to 6s via interpolation
+
+AMPDS2_APPLIANCE_MAP: Dict[str, Optional[str]] = {
+    "aggregate":       "WHE",
+    "fridge":          "FGE",
+    "washing_machine": "CWE",
+    "dishwasher":      "DWE",
+    "kettle":          None,
+    "microwave":       None,
+}
+
+
+def load_ampds2_meter(csv_dir: Path, code: str) -> Optional[pd.Series]:
+    csv_path = csv_dir / f"Electricity_{code}.csv"
+    if not csv_path.exists():
+        print(f"  [WARNING] AMPds2 file not found: {csv_path}")
+        return None
+    try:
+        df = pd.read_csv(csv_path)
+        index = pd.to_datetime(df["unix_ts"], unit="s", utc=True)
+        series = pd.Series(df["P"].values, index=index, name=code)
+        return series.clip(lower=0)
+    except Exception as e:
+        print(f"  [WARNING] Could not load AMPds2 {code}: {e}")
+        return None
+
+
+def load_ampds_house(house: int = 1, data_dir: Optional[Path] = None) -> pd.DataFrame:
+    """
+    Load AMPds2 dataset (single house, CSV format).
+    Sampling: 60 seconds -> resampled to 6s in preprocess_house().
+    Kettle and microwave not available in AMPds2.
+    """
+    if house != 1:
+        raise ValueError("AMPds2 has only 1 house.")
+    if data_dir is None:
+        data_dir = DATASETS["AMPds2"]["path"]
+
+    csv_dir = data_dir / "AMPds2" / "Electricity" / "Sub_meter_data"
+    if not csv_dir.exists():
+        csv_dir = data_dir / "Electricity" / "Sub_meter_data"
+    if not csv_dir.exists():
+        raise FileNotFoundError(f"AMPds2 CSV directory not found: {csv_dir}")
+
+    print(f"Loading AMPds2 House 1 (60s sampling, Canada)...")
+    series_dict = {}
+    for appliance, code in AMPDS2_APPLIANCE_MAP.items():
+        if code is None:
+            print(f"  [SKIP] '{appliance}' not available in AMPds2")
+            series_dict[appliance] = None
+            continue
+        series = load_ampds2_meter(csv_dir, code)
+        series_dict[appliance] = series
+        if series is not None:
+            print(f"  [OK] {appliance} ({code}): {len(series)} points")
+
+    valid = {k: v for k, v in series_dict.items() if v is not None}
+    df = pd.DataFrame(valid)
+    for appliance in ["aggregate"] + APPLIANCE_NAMES:
+        if appliance not in df.columns:
+            df[appliance] = np.nan
+    df.index = df.index.tz_convert(None)
+    return df[["aggregate"] + APPLIANCE_NAMES]
+
+
+# ============================================================
+# 6. LOAD REFIT (CSV format, ~8-second intervals)
+# ============================================================
+# Columns: Time, Unix, Aggregate, Appliance1..Appliance9, Issues
+# Sampling: ~8-14 seconds -> resampled to 6s
+
+REFIT_APPLIANCE_MAP: Dict[int, Dict[str, Optional[int]]] = {
+    1: {"aggregate": 0, "kettle": None, "fridge": 2,
+        "washing_machine": 5, "dishwasher": 6, "microwave": None},
+    2: {"aggregate": 0, "kettle": None, "fridge": 1,
+        "washing_machine": 2, "dishwasher": 3, "microwave": None},
+    3: {"aggregate": 0, "kettle": None, "fridge": 2,
+        "washing_machine": 6, "dishwasher": 5, "microwave": None},
+    4: {"aggregate": 0, "kettle": None, "fridge": 1,
+        "washing_machine": 5, "dishwasher": 4, "microwave": None},
+    5: {"aggregate": 0, "kettle": None, "fridge": 1,
+        "washing_machine": 3, "dishwasher": 4, "microwave": None},
+}
+
+
+def load_refit_house(house: int, data_dir: Optional[Path] = None) -> pd.DataFrame:
+    """
+    Load one REFIT house from CSV.
+    Reference: Murray et al. Scientific Data 2015.
+    """
+    if data_dir is None:
+        data_dir = DATASETS["REFIT"]["path"]
+
+    csv_path = data_dir / f"CLEAN_House{house}.csv"
+    if not csv_path.exists():
+        raise FileNotFoundError(f"REFIT House {house} not found: {csv_path}")
+
+    print(f"Loading REFIT House {house}...")
+    df_raw = pd.read_csv(csv_path, parse_dates=["Time"], index_col="Time")
+    mapping = REFIT_APPLIANCE_MAP.get(house, {
+        "aggregate": 0, "kettle": None, "fridge": 1,
+        "washing_machine": 4, "dishwasher": 5, "microwave": None
+    })
+
+    series_dict = {"aggregate": df_raw["Aggregate"].astype(float).clip(lower=0)}
+    print(f"  [OK] aggregate: {len(df_raw)} points")
+
+    for appliance in APPLIANCE_NAMES:
+        col_idx = mapping.get(appliance)
+        if col_idx is None:
+            series_dict[appliance] = None
+            continue
+        col_name = f"Appliance{col_idx}"
+        if col_name in df_raw.columns:
+            series_dict[appliance] = df_raw[col_name].astype(float).clip(lower=0)
+            print(f"  [OK] {appliance} ({col_name})")
+        else:
+            series_dict[appliance] = None
+
+    if "Issues" in df_raw.columns:
+        issues = df_raw["Issues"]
+        n_bad = (issues > 0).sum()
+        if n_bad > 0:
+            print(f"  Filtered {n_bad} rows with Issues flag")
+
+    valid = {k: v for k, v in series_dict.items() if v is not None}
+    df = pd.DataFrame(valid)
+    for appliance in ["aggregate"] + APPLIANCE_NAMES:
+        if appliance not in df.columns:
+            df[appliance] = np.nan
+    if "Issues" in df_raw.columns:
+        df = df[df_raw["Issues"] == 0]
+    return df[["aggregate"] + APPLIANCE_NAMES]
 
 
 # ============================================================

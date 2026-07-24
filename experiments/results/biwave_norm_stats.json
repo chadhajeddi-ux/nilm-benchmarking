@@ -1,0 +1,11 @@
+{
+  "agg_mean": 404.1091613769531,
+  "agg_std": 428.68316650390625,
+  "appliance_max": {
+    "kettle": 3100.0,
+    "fridge": 300.0,
+    "washing_machine": 2500.0,
+    "dishwasher": 2500.0,
+    "microwave": 3000.0
+  }
+}

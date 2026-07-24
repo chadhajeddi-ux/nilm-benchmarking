@@ -1,8 +1,7 @@
 """
-metrics.py — Comprehensive NILM Evaluation Metrics
+metrics.py :  Comprehensive NILM Evaluation Metrics
 =====================================================
-Implements ALL metrics from NILMFormer Table 2 (Petralia et al.,
-KDD 2025) plus the metrics required by the internship proposal.
+Implements ALL metrics from NILMFormer 
 
 Power regression metrics:
     MAE   — Mean Absolute Error (Watts)
@@ -31,9 +30,6 @@ Usage:
     results = tracker.compute()
     tracker.print_table()
     tracker.to_dataframe().to_csv("results.csv")
-
-Author  : Chadha Jeddi
-Project : Benchmarking DL Models for NILM — ACTIA ES / PowerLab
 """
 
 from __future__ import annotations
@@ -79,7 +75,7 @@ def nde(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     NDE = Σ(ŷ_t - y_t)² / Σ(y_t)²
 
     Measures relative error normalized by the true signal energy.
-    Less sensitive to absolute power levels than MAE — useful for
+    Less sensitive to absolute power levels than MAE , useful for
     cross-dataset comparison where appliances have different Wattages.
     Lower is better. NDE=0 means perfect prediction.
 
@@ -135,7 +131,7 @@ def teca(y_true: np.ndarray, y_pred: np.ndarray) -> float:
 
 def matching_ratio(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     """
-    Matching Ratio — best overall indicator per NILMFormer.
+    Matching Ratio :  best overall indicator per NILMFormer.
 
     MR = Σ min(ŷ_t, y_t) / Σ max(ŷ_t, y_t)
 
@@ -247,7 +243,7 @@ def recall(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     did the model correctly detect?"
     Low recall means the model misses real ON events.
 
-    NILMFormer Table 2 shows BiGRU recall = 0.962 — very high.
+    NILMFormer Table 2 shows BiGRU recall = 0.962  : very high.
     High recall + low precision → model over-predicts ON.
     """
     tp, _, _, fn = _binary_counts(y_true, y_pred)
@@ -316,10 +312,10 @@ class MetricsTracker:
 
         Parameters
         ----------
-        pred_power : (B, N_app) — normalized power predictions [0,1]
-        true_power : (B, N_app) — normalized power targets [0,1]
-        pred_state_logits : (B, N_app) — raw logits (pre-sigmoid)
-        true_state : (B, N_app) — binary 0/1 ground truth
+        pred_power : (B, N_app)  : normalized power predictions [0,1]
+        true_power : (B, N_app)  :  normalized power targets [0,1]
+        pred_state_logits : (B, N_app) :  raw logits (pre-sigmoid)
+        true_state : (B, N_app)  : binary 0/1 ground truth
         """
         # Convert tensors to numpy if needed
         if hasattr(pred_power, "detach"):
@@ -500,7 +496,7 @@ def focal_loss(
     gamma: float = 2.0,
 ) -> "torch.Tensor":
     """
-    Focal Loss for binary classification — handles extreme class imbalance.
+    Focal Loss for binary classification  : handles extreme class imbalance.
 
     FL(p_t) = -α_t × (1 - p_t)^γ × log(p_t)
 
@@ -576,7 +572,7 @@ def multi_task_loss(
         1. Power regression (SmoothL1): predict accurate Watts
         2. State classification (Focal): detect ON/OFF states
         3. Gated consistency (SmoothL1): enforce ŷ = p̂ × σ(ŝ)
-           matches the true power — the gated output should be
+           matches the true power  ,  the gated output should be
            physically consistent.
 
     SmoothL1 is used instead of MSE because it is less sensitive

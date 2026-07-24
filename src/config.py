@@ -53,8 +53,8 @@ DATASETS = {
         "houses": [1, 2, 3, 4, 5],
         "test_house": 2,              # Following Mamba-ECA-UNet: house 2 for testing
     },
-    "AMPds": {
-        "path": DATA_RAW_DIR / "AMPds",
+    "AMPds2": {
+        "path": DATA_RAW_DIR / "AMPds2",
         "sampling_rate": 60,          # 1-minute intervals
         "target_sampling_rate": 6,    # upsample to 6 seconds (interpolation)
         "houses": [1],                # AMPds has only 1 house
