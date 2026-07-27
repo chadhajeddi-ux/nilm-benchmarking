@@ -1,8 +1,12 @@
 """
-config.py : Central Configuration for NILM Benchmarking Project
+config.py — Central Configuration for NILM Benchmarking Project
 ================================================================
 All project constants live here. Every other file imports from this module.
 Change a value here → it updates everywhere automatically.
+
+Author  : Chadha Jeddi
+Project : Benchmarking DL Models for NILM — ACTIA ES / PowerLab
+Year    : 2026-2027
 """
 
 import os
@@ -47,7 +51,7 @@ DATASETS = {
         "test_house": 1,              # Leave-One-House-Out: house 1 for testing
     },
     "UK-DALE": {
-        "path": DATA_RAW_DIR / "UKDALE",
+        "path": DATA_RAW_DIR / "UK-DALE",
         "sampling_rate": 6,           # already at 6 seconds
         "target_sampling_rate": 6,
         "houses": [1, 2, 3, 4, 5],
@@ -57,15 +61,8 @@ DATASETS = {
         "path": DATA_RAW_DIR / "AMPds2",
         "sampling_rate": 60,          # 1-minute intervals
         "target_sampling_rate": 6,    # upsample to 6 seconds (interpolation)
-        "houses": [1],                # AMPds has only 1 house
+        "houses": [1],                # AMPds2 has only 1 house
         "test_house": 1,
-    },
-    "REFIT": {
-        "path": DATA_RAW_DIR / "REFIT",
-        "sampling_rate": 8,           # 8-second intervals
-        "target_sampling_rate": 6,    # resample to 6 seconds
-        "houses": list(range(1, 21)), # 20 houses
-        "test_house": 2,
     },
 }
 
@@ -147,9 +144,9 @@ WINDOW_DURATION_MIN = (WINDOW_SIZE * SAMPLING_RATE) / 60  # = 48.0 minutes
 # Stride = how many steps to slide the window between consecutive examples.
 # stride=1 → maximum overlap → most training examples (recommended for training)
 # stride=WINDOW_SIZE → no overlap → fewest examples (faster but less data)
-TRAIN_STRIDE = 1             # maximum data augmentation for training
-TEST_STRIDE = 1              # every timestep gets a prediction for evaluation
-EVAL_STRIDE = WINDOW_SIZE  
+TRAIN_STRIDE = 120           # stride=120: 12min between windows, fast training
+TEST_STRIDE = 480            # non-overlapping windows for evaluation (NILMFormer protocol)
+
 # Gap filling: forward-fill missing values if gap < MAX_GAP_SECONDS
 MAX_GAP_SECONDS = 180        # 3 minutes, following Mamba-ECA-UNet paper
 
@@ -161,7 +158,6 @@ MAX_GAP_SECONDS = 180        # 3 minutes, following Mamba-ECA-UNet paper
 
 # --- Shared across all models ---
 INPUT_CHANNELS = DWT_N_SUBBANDS + 2  # 4 DWT sub-bands + 2 temporal (sin/cos hour)
-INPUT_CHANNELS_NO_TEMPORAL = DWT_N_SUBBANDS  # for ablation without temporal features# 4 channels (one per DWT sub-band)
 SEQ_LENGTH = WINDOW_SIZE         # 480 timesteps
 
 # --- Your proposed model: DWT-BiGRU-Lite-CBAM(T)-DyT ---
@@ -229,7 +225,7 @@ BASELINE_MODELS = {
 # 7. TRAINING CONFIGURATION
 # ============================================================
 
-BATCH_SIZE = 32              # number of windows per training step
+BATCH_SIZE = 256             # larger batches for class imbalance (more ON events per batch)
 LEARNING_RATE = 1e-3         # Adam optimizer starting learning rate
 WEIGHT_DECAY = 1e-5          # L2 regularization to prevent overfitting
 NUM_EPOCHS = 50              # maximum training epochs
