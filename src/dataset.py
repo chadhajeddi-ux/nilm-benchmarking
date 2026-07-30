@@ -235,6 +235,7 @@ class NILMDataset(Dataset):
         apply_dwt: bool = True,
         add_temporal_features: bool = True,
         instance_norm: bool = True,
+        seg_size: int = None,
     ) -> None:
         super().__init__()
         self.window_size = window_size
@@ -243,6 +244,7 @@ class NILMDataset(Dataset):
         self.apply_dwt = apply_dwt
         self.add_temporal_features = add_temporal_features
         self.instance_norm = instance_norm
+        self.seg_size = seg_size  # None = seq2point, int = seq2seg (DU-NILM)
 
         # ---- extract numpy arrays once (fast __getitem__ later) ----
         self.aggregate = df["aggregate"].to_numpy(dtype=np.float32)
@@ -314,9 +316,20 @@ class NILMDataset(Dataset):
             temporal = np.stack([hour_sin, hour_cos], axis=0)  # (2, 480)
             x = np.concatenate([x, temporal], axis=0)  # (6, 480) or (3, 480)
 
-        # ---- targets at the CENTER point (seq2point) ----
-        y_power = self.power[center] / self.app_max     # scaled to [0,1]
-        y_state = self.state[center]                    # already 0/1
+        # ---- targets — seq2point (center) or seq2seg (segment) ----
+        if self.seg_size is None:
+            # Seq2point — single center point (default for all baselines)
+            y_power = self.power[center] / self.app_max  # (N_app,)
+            y_state = self.state[center]                  # (N_app,)
+        else:
+            # Seq2seg — DU-NILM style segment prediction (BiWave-NILM)
+            seg_start = start + (self.window_size - self.seg_size) // 2
+            seg_end   = seg_start + self.seg_size
+            y_power = self.power[seg_start:seg_end] / self.app_max  # (seg, N)
+            y_state = self.state[seg_start:seg_end]                  # (seg, N)
+            # Transpose to (N_app, seg_size) for loss computation
+            y_power = y_power.T  # (N_app, seg_size)
+            y_state = y_state.T  # (N_app, seg_size)
 
         return (
             torch.from_numpy(x),
@@ -398,6 +411,7 @@ def build_dataloaders(
     apply_dwt: bool = True,
     add_temporal_features: bool = True,
     instance_norm: bool = True,
+    seg_size: int = None,
 ) -> Tuple[DataLoader, DataLoader, NormStats]:
     """
     Build train + validation DataLoaders with leakage-safe normalization.
@@ -419,11 +433,13 @@ def build_dataloaders(
     train_ds = NILMDataset(train_df, stats, stride=train_stride,
                            apply_dwt=apply_dwt,
                            add_temporal_features=add_temporal_features,
-                           instance_norm=instance_norm)
+                           instance_norm=instance_norm,
+                           seg_size=seg_size)
     val_ds = NILMDataset(val_df, stats, stride=val_stride,
                          apply_dwt=apply_dwt,
                          add_temporal_features=add_temporal_features,
-                         instance_norm=instance_norm)
+                         instance_norm=instance_norm,
+                         seg_size=seg_size)
 
     g = torch.Generator()
     g.manual_seed(SEED)  # reproducible shuffling

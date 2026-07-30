@@ -1,5 +1,5 @@
 """
-preprocessing.py — Data Loading and Cleaning for NILM Datasets
+preprocessing.py  : Data Loading and Cleaning for NILM Datasets
 =================================================================
 Loads raw power data from UK-DALE, REDD, AMPds2, and REFIT datasets,
 applies resampling, gap-filling, and normalization, producing clean
@@ -14,9 +14,6 @@ Supported formats:
 Appliance meter mapping (UK-DALE):
     Verified empirically via duty-cycle analysis against official
     UK-DALE documentation (Kelly & Knottenbelt, 2015).
-
-Author  : Chadha Jeddi
-Project : Benchmarking DL Models for NILM — ACTIA ES / PowerLab
 """
 
 import warnings

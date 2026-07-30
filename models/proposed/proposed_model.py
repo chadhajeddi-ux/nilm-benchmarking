@@ -1,5 +1,5 @@
 """
-proposed_model.py  : BiWaveNILM  for NILM
+proposed_model.py — DWT-DWSConv-BiGRU‖BiTCN-CBAM(T)-DyT for NILM
 ====================================================================
 The proposed multi-task NILM model for embedded deployment on
 STM32MP2 NPU (Neural-ART, INT8 quantization).
@@ -41,6 +41,9 @@ Target deployment constraints (r):
 Estimated complexity:
     Parameters: ~355K
     INT8 size:  ~0.355 MB (well within 2 MB budget)
+
+Author  : Chadha Jeddi
+Project : Benchmarking DL Models for NILM — ACTIA ES / PowerLab
 """
 
 import torch
@@ -233,7 +236,7 @@ class TCNResBlock(nn.Module):
 #     Pool across channels → Conv1D → sigmoid weights per timestep
 #
 # "Lite" because we use a single-path GAP (not GAP+GMP as in
-# original CBAM) and a smaller bottleneck , reducing parameters
+# original CBAM) and a smaller bottleneck — reducing parameters
 # for embedded deployment.
 
 class LiteCBAM(nn.Module):
@@ -306,17 +309,17 @@ class LiteCBAM(nn.Module):
 
 
 # ============================================================
-# MAIN MODEL: BiWaveNILM
+# MAIN MODEL: DWT-DWSConv-BiGRU‖BiTCN-CBAM(T)-DyT
 # ============================================================
 
-class BiWaveNILM(nn.Module):
+class ProposedModel(nn.Module):
     """
     Proposed multi-task NILM model for embedded NPU deployment.
 
     Combines complementary temporal modeling (BiGRU for adaptive
     memory + BiTCN for multi-scale local patterns) with efficient
     depthwise-separable convolution, lightweight attention, and
-    batch-independent normalization ,  all designed to satisfy
+    batch-independent normalization — all designed to satisfy
     STM32MP2 NPU deployment constraints.
 
     Parameters
@@ -542,7 +545,7 @@ if __name__ == "__main__":
     print("Target: STM32MP2 NPU (Neural-ART, INT8)")
     print("=" * 65)
 
-    model = BiWaveNILM(
+    model = ProposedModel(
         in_channels=INPUT_CHANNELS,
         window_size=WINDOW_SIZE,
         n_appliances=N_APPLIANCES,
