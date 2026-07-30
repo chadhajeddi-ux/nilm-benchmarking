@@ -1,19 +1,22 @@
 """
-preprocessing.py  : Data Loading and Cleaning for NILM Datasets
+preprocessing.py — Data Loading and Cleaning for NILM Datasets
 =================================================================
 Loads raw power data from UK-DALE, REDD, AMPds2, and REFIT datasets,
 applies resampling, gap-filling, and normalization, producing clean
 aggregate + appliance power series ready for windowing.
 
 Supported formats:
-    UK-DALE : pandas HDFStore (.h5) :  NILMTK format
-    REDD    : pandas HDFStore (.h5) :  NILMTK format
+    UK-DALE : pandas HDFStore (.h5) — NILMTK format
+    REDD    : pandas HDFStore (.h5) — NILMTK format
     AMPds2  : CSV files (after unzip)
     REFIT   : CSV files (after 7z extraction)
 
 Appliance meter mapping (UK-DALE):
     Verified empirically via duty-cycle analysis against official
     UK-DALE documentation (Kelly & Knottenbelt, 2015).
+
+Author  : Chadha Jeddi
+Project : Benchmarking DL Models for NILM — ACTIA ES / PowerLab
 """
 
 import warnings
@@ -152,7 +155,7 @@ def load_ukdale_house(
                    'dishwasher', 'microwave']
         Index: timestamp (timezone-aware, Europe/London).
         Missing appliances (not monitored in that house) are filled
-        with NaN columns ,  handled later by fill_missing_appliance().
+        with NaN columns — handled later by fill_missing_appliance().
 
     Example
     -------
@@ -210,7 +213,7 @@ def load_ukdale_house(
 
 REDD_METER_MAP: Dict[int, Dict[str, object]] = {
     1: {
-        "aggregate": [1, 2],     # REDD splits mains into 2 phases ,  sum them
+        "aggregate": [1, 2],     # REDD splits mains into 2 phases — sum them
         "kettle": None,          # REDD does not have a dedicated kettle meter
         "fridge": 5,
         "washing_machine": 20,
@@ -360,7 +363,7 @@ def clip_outliers(
     df : pd.DataFrame
         Columns: aggregate + appliance names.
     appliance_config : dict
-        From config.APPLIANCES  ,  contains max_power per appliance.
+        From config.APPLIANCES — contains max_power per appliance.
 
     Returns
     -------
@@ -385,48 +388,155 @@ def clip_outliers(
 # 5. STATE LABEL GENERATION (ON/OFF)
 # ============================================================
 
+def _compute_kelly_status(
+    initial_status: np.ndarray,
+    min_on: int,
+    min_off: int,
+    min_activation_time: int,
+) -> np.ndarray:
+    """
+    Filter binary status labels using Kelly et al. (NeuralNILM 2015)
+    duration constraints. Removes spurious activations.
+
+    Parameters
+    ----------
+    initial_status : ndarray (N,)
+        Raw binary status from threshold comparison.
+    min_on : int
+        Minimum consecutive ON timesteps for a valid event.
+    min_off : int
+        Minimum consecutive OFF timesteps between events.
+    min_activation_time : int
+        Minimum total activation duration.
+
+    Returns
+    -------
+    ndarray (N,) — cleaned binary status.
+
+    Reference
+    ---------
+    Petralia et al. NILMFormer KDD 2025 — _compute_status()
+    Kelly & Knottenbelt, NeuralNILM 2015
+    """
+    tmp_status = np.zeros_like(initial_status)
+    status_diff = np.diff(initial_status)
+    events_idx = status_diff.nonzero()[0]
+    events_idx += 1
+
+    if len(events_idx) == 0:
+        return tmp_status
+
+    if initial_status[0]:
+        events_idx = np.insert(events_idx, 0, 0)
+    if initial_status[-1]:
+        events_idx = np.insert(events_idx, events_idx.size, initial_status.size)
+
+    if len(events_idx) % 2 != 0:
+        events_idx = events_idx[:-1]
+    if len(events_idx) == 0:
+        return tmp_status
+
+    events_idx = events_idx.reshape((-1, 2))
+    on_events = events_idx[:, 0].copy()
+    off_events = events_idx[:, 1].copy()
+
+    if len(on_events) > 0:
+        off_duration = np.insert(on_events[1:] - off_events[:-1], 0, 1000)
+        on_events = on_events[off_duration > min_off]
+        off_events = off_events[np.roll(off_duration, -1) > min_off]
+
+        on_duration = off_events - on_events
+        on_events = on_events[on_duration >= min_on]
+        off_events = off_events[on_duration >= min_on]
+
+    if len(on_events) > 0 and min_activation_time > 0:
+        activation_durations = off_events - on_events
+        valid = activation_durations >= min_activation_time
+        on_events = on_events[valid]
+        off_events = off_events[valid]
+
+    for on, off in zip(on_events, off_events):
+        tmp_status[on:off] = 1
+
+    return tmp_status
+
+
+# Kelly et al. NeuralNILM 2015 activation parameters
+# Used by NILMFormer (Petralia et al. KDD 2025)
+# Duration units: timesteps at 6-second sampling
+#   min_on:  minimum ON duration (washing_machine: 180 × 6s = 18 min)
+#   min_off: minimum OFF between events
+#   min_activation_time: minimum total activation
+KELLY_ACTIVATION_PARAMS = {
+    "kettle":          {"min_on": 1,   "min_off": 0,   "min_act": 1},
+    "fridge":          {"min_on": 6,   "min_off": 1,   "min_act": 1},
+    "washing_machine": {"min_on": 180, "min_off": 16,  "min_act": 12},
+    "dishwasher":      {"min_on": 180, "min_off": 180, "min_act": 12},
+    "microwave":       {"min_on": 1,   "min_off": 3,   "min_act": 1},
+}
+
+
 def compute_state_labels(
     df: pd.DataFrame,
     appliance_config: Dict = APPLIANCES,
+    use_kelly_filter: bool = True,
 ) -> pd.DataFrame:
     """
     Generate binary ON/OFF state labels from continuous power values
-    using each appliance's power_threshold.
+    using Kelly et al. NeuralNILM 2015 duration-filtered approach.
 
-    state = 1 (ON)  if power > threshold
-    state = 0 (OFF) otherwise
+    Two-step process:
+        1. Initial status: power within [min_threshold, max_threshold]
+        2. Duration filter: removes spurious activations shorter than
+           min_on_duration or with gaps shorter than min_off_duration
+
+    This matches NILMFormer (Petralia et al. KDD 2025) preprocessing
+    exactly for fair comparison.
 
     Parameters
     ----------
     df : pd.DataFrame
         Must contain appliance power columns.
     appliance_config : dict
-        From config.APPLIANCES  ,  contains power_threshold per appliance.
-
-    Returns
-    -------
-    pd.DataFrame
-        New columns added: '{appliance}_state' for each appliance.
-
-    Example
-    -------
-    >>> df = pd.DataFrame({'kettle': [0, 5, 2500, 2400, 10]})
-    >>> result = compute_state_labels(df)
-    >>> result['kettle_state'].tolist()
-    [0, 0, 1, 1, 0]
+        From config.APPLIANCES — contains power_threshold, max_power.
+    use_kelly_filter : bool
+        If True, apply duration filtering (recommended).
+        If False, use simple threshold only (backward compatible).
     """
     df = df.copy()
 
     for appliance, cfg in appliance_config.items():
-        if appliance in df.columns:
-            threshold = cfg["power_threshold"]
-            df[f"{appliance}_state"] = (df[appliance] > threshold).astype(int)
+        if appliance not in df.columns:
+            continue
+
+        threshold = cfg["power_threshold"]
+        max_power = cfg["max_power"]
+        power = df[appliance].values
+
+        # Step 1: Initial threshold — power within valid range
+        initial_status = (
+            (power >= threshold) & (power <= max_power)
+        ).astype(int)
+
+        # Step 2: Duration filter (Kelly et al.)
+        if use_kelly_filter and appliance in KELLY_ACTIVATION_PARAMS:
+            params = KELLY_ACTIVATION_PARAMS[appliance]
+            status = _compute_kelly_status(
+                initial_status,
+                min_on=params["min_on"],
+                min_off=params["min_off"],
+                min_activation_time=params["min_act"],
+            )
+        else:
+            status = initial_status
+
+        df[f"{appliance}_state"] = status
 
     return df
 
 
 # ============================================================
-# 6. COMPLETE PIPELINE  : ONE FUNCTION TO RULE THEM ALL
+# 6. COMPLETE PIPELINE — ONE FUNCTION TO RULE THEM ALL
 # ============================================================
 
 def preprocess_house(
@@ -476,8 +586,13 @@ def preprocess_house(
     n_nan_after_fill = df.isna().sum().sum()
     print(f"  After gap-filling: {n_nan_after_fill} NaN remaining")
 
+    # Zero out sensor noise (< 5W) — NILMFormer approach
+    for col in APPLIANCE_NAMES:
+        if col in df.columns:
+            df.loc[df[col] < 5, col] = 0
+
     df = clip_outliers(df)
-    print(f"  Outliers clipped per appliance config")
+    print(f"  Sensor noise zeroed (<5W) and outliers clipped")
 
     df = compute_state_labels(df)
     print(f"  State labels computed: "
@@ -540,7 +655,7 @@ def load_ampds_house(house: int = 1, data_dir: Optional[Path] = None) -> pd.Data
     if house != 1:
         raise ValueError("AMPds2 has only 1 house.")
     if data_dir is None:
-        data_dir = DATASETS["AMPds2"]["path"]
+        data_dir = DATASETS["AMPds"]["path"]
 
     csv_dir = data_dir / "AMPds2" / "Electricity" / "Sub_meter_data"
     if not csv_dir.exists():

@@ -144,7 +144,7 @@ WINDOW_DURATION_MIN = (WINDOW_SIZE * SAMPLING_RATE) / 60  # = 48.0 minutes
 # Stride = how many steps to slide the window between consecutive examples.
 # stride=1 → maximum overlap → most training examples (recommended for training)
 # stride=WINDOW_SIZE → no overlap → fewest examples (faster but less data)
-TRAIN_STRIDE = 120           # stride=120: 12min between windows, fast training
+TRAIN_STRIDE = 30           # stride=120: 12min between windows, fast training
 TEST_STRIDE = 480            # non-overlapping windows for evaluation (NILMFormer protocol)
 
 # Gap filling: forward-fill missing values if gap < MAX_GAP_SECONDS

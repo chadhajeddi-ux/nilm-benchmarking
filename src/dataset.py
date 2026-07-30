@@ -34,6 +34,11 @@ Key design decisions (engineering rationale):
    Each window of 480 aggregate points predicts power + ON/OFF state
    of every appliance at the CENTER timestep only (Luo et al., 2023).
 
+5. TEMPORAL FEATURE INJECTION (inspired by NILMFormer TimeRPE).
+   Sin/cos encoding of hour-of-day added as 2 extra input channels,
+   giving the model awareness of daily appliance usage patterns.
+   Input shape: (6, 480) = 4 DWT sub-bands + 2 temporal features.
+
 Author  : Chadha Jeddi
 Project : Benchmarking DL Models for NILM — ACTIA ES / PowerLab
 """
@@ -145,12 +150,6 @@ def find_contiguous_segments(
     -------
     List of (start_idx, end_idx) integer positions, end exclusive.
         Each segment satisfies: diff(index) == sampling_seconds inside.
-
-    Example
-    -------
-    >>> # rows 0..99 contiguous, gap, rows 100..250 contiguous
-    >>> segments
-    [(0, 100), (100, 251)]
     """
     if len(index) == 0:
         return []
@@ -199,8 +198,8 @@ class NILMDataset(Dataset):
     Seq2point NILM dataset: aggregate window → (DWT features, targets).
 
     Each item:
-        x            : float32 tensor (4, 480)   — DWT sub-bands of the
-                                                   z-scored aggregate window
+        x            : float32 tensor (6, 480)   — 4 DWT sub-bands +
+                                                   2 temporal features
         y_power      : float32 tensor (N_app,)   — power at center, in [0,1]
         y_state      : float32 tensor (N_app,)   — 0/1 state at center
 
@@ -218,8 +217,12 @@ class NILMDataset(Dataset):
     sampling_seconds : int
         Expected index spacing — used for gap detection.
     apply_dwt : bool
-        If False, x is the raw normalized window with shape (1, 480).
-        Used for the "no-DWT" ablation variant (Day 19 of the plan).
+        If False, x is the raw normalized window with shape (1, 480)
+        or (3, 480) with temporal features.
+        Used for the "no-DWT" ablation variant.
+    add_temporal_features : bool
+        If True, appends 2 channels (sin/cos hour-of-day) to x.
+        Inspired by NILMFormer TimeRPE. Default True.
     """
 
     def __init__(
@@ -231,17 +234,19 @@ class NILMDataset(Dataset):
         sampling_seconds: int = 6,
         apply_dwt: bool = True,
         add_temporal_features: bool = True,
+        instance_norm: bool = True,
     ) -> None:
         super().__init__()
         self.window_size = window_size
         self.stride = stride
         self.stats = stats
         self.apply_dwt = apply_dwt
+        self.add_temporal_features = add_temporal_features
+        self.instance_norm = instance_norm
 
         # ---- extract numpy arrays once (fast __getitem__ later) ----
         self.aggregate = df["aggregate"].to_numpy(dtype=np.float32)
-        self.timestamps = df.index
-        self.add_temporal_features = add_temporal_features
+        self.timestamps = df.index  # needed for temporal features
 
         self.power = np.stack(
             [df[a].to_numpy(dtype=np.float32) for a in APPLIANCE_NAMES],
@@ -279,22 +284,35 @@ class NILMDataset(Dataset):
         end = start + self.window_size
         center = start + self.window_size // 2
 
-        # ---- input: z-score aggregate window, then DWT ----
+        # ---- input: normalize aggregate window, then DWT ----
         window = self.aggregate[start:end]
-        window = (window - self.stats.agg_mean) / self.stats.agg_std
+
+        # Instance normalization (NILMFormer approach)
+        # Each window normalized by its own mean/std
+        # Removes household-specific power levels → better cross-house generalization
+        if self.instance_norm:
+            w_mean = window.mean()
+            w_std = window.std() + 1e-8
+            window = (window - w_mean) / w_std
+        else:
+            window = (window - self.stats.agg_mean) / self.stats.agg_std
 
         if self.apply_dwt:
             x = dwt_transform(window)              # (4, 480) float32
         else:
             x = window[np.newaxis, :].astype(np.float32)  # (1, 480)
 
+        # ---- Temporal feature injection (inspired by NILMFormer TimeRPE) ----
+        # Encodes hour-of-day as sin/cos for each timestep in the window.
+        # Gives BiGRU awareness of daily appliance usage patterns:
+        # kettle at 7am breakfast vs 11pm — completely different contexts.
         if self.add_temporal_features:
             ts = self.timestamps[start:end]
             hours = (ts.hour + ts.minute / 60.0).to_numpy().astype(np.float32)
-            hour_sin = np.sin(2 * np.pi * hours / 24)
-            hour_cos = np.cos(2 * np.pi * hours / 24)
-            temporal = np.stack([hour_sin, hour_cos], axis=0)
-            x = np.concatenate([x, temporal], axis=0)
+            hour_sin = np.sin(2 * np.pi * hours / 24)  # (480,)
+            hour_cos = np.cos(2 * np.pi * hours / 24)  # (480,)
+            temporal = np.stack([hour_sin, hour_cos], axis=0)  # (2, 480)
+            x = np.concatenate([x, temporal], axis=0)  # (6, 480) or (3, 480)
 
         # ---- targets at the CENTER point (seq2point) ----
         y_power = self.power[center] / self.app_max     # scaled to [0,1]
@@ -379,9 +397,17 @@ def build_dataloaders(
     num_workers: int = 4,
     apply_dwt: bool = True,
     add_temporal_features: bool = True,
+    instance_norm: bool = True,
 ) -> Tuple[DataLoader, DataLoader, NormStats]:
     """
     Build train + validation DataLoaders with leakage-safe normalization.
+
+    When instance_norm=True (default, recommended):
+        Each window normalized by its own mean/std — matches NILMFormer.
+        Better cross-house generalization.
+
+    When instance_norm=False:
+        Global z-score using train set statistics — backward compatible.
 
     Returns (train_loader, val_loader, stats). `stats` must be saved
     with the experiment: evaluation and embedded deployment need the
@@ -392,10 +418,12 @@ def build_dataloaders(
 
     train_ds = NILMDataset(train_df, stats, stride=train_stride,
                            apply_dwt=apply_dwt,
-                           add_temporal_features=add_temporal_features)
+                           add_temporal_features=add_temporal_features,
+                           instance_norm=instance_norm)
     val_ds = NILMDataset(val_df, stats, stride=val_stride,
                          apply_dwt=apply_dwt,
-                         add_temporal_features=add_temporal_features)
+                         add_temporal_features=add_temporal_features,
+                         instance_norm=instance_norm)
 
     g = torch.Generator()
     g.manual_seed(SEED)  # reproducible shuffling
@@ -454,7 +482,8 @@ if __name__ == "__main__":
     print(f"[2] Split: train={len(train_df)}, val={len(val_df)} (time-based)")
 
     train_loader, val_loader, stats = build_dataloaders(
-        train_df, val_df, batch_size=16, num_workers=0
+        train_df, val_df, batch_size=16, num_workers=0,
+        add_temporal_features=True,
     )
     print(f"[3] NormStats: mean={stats.agg_mean:.1f}, std={stats.agg_std:.1f}")
 
@@ -462,7 +491,8 @@ if __name__ == "__main__":
     x, y_power, y_state = next(iter(train_loader))
     print(f"[4] Batch shapes: x={tuple(x.shape)}, "
           f"y_power={tuple(y_power.shape)}, y_state={tuple(y_state.shape)}")
-    assert x.shape[1:] == (4, WINDOW_SIZE)
+    assert x.shape[1:] in [(4, WINDOW_SIZE), (6, WINDOW_SIZE)], \
+        f"Unexpected shape: {x.shape}"
     assert y_power.shape[1] == len(APPLIANCE_NAMES)
     assert float(y_power.max()) <= 1.0 + 1e-6, "power targets must be in [0,1]"
 
@@ -476,10 +506,12 @@ if __name__ == "__main__":
     assert seg_ok
 
     # ---- no-DWT ablation variant ----
-    ds_raw = NILMDataset(train_df, stats, stride=10, apply_dwt=False)
+    ds_raw = NILMDataset(train_df, stats, stride=10, apply_dwt=False,
+                         add_temporal_features=True)
     x_raw, _, _ = ds_raw[0]
     print(f"[6] Ablation (apply_dwt=False) input shape: {tuple(x_raw.shape)}")
-    assert x_raw.shape == (1, WINDOW_SIZE)
+    assert x_raw.shape in [(1, WINDOW_SIZE), (3, WINDOW_SIZE)], \
+        f"Unexpected ablation shape: {x_raw.shape}"
 
     # ---- stats persistence ----
     p = DATA_PROCESSED_DIR / "_selftest_stats.json"
@@ -488,6 +520,19 @@ if __name__ == "__main__":
     assert stats2.agg_mean == stats.agg_mean
     p.unlink()
     print(f"[7] NormStats save/load round-trip OK")
+
+    # ---- temporal features check ----
+    ds_temporal = NILMDataset(train_df, stats, stride=10,
+                              apply_dwt=True, add_temporal_features=True)
+    x_t, _, _ = ds_temporal[0]
+    print(f"[8] With temporal features: shape={tuple(x_t.shape)}")
+    assert x_t.shape == (6, WINDOW_SIZE), \
+        f"Expected (6, {WINDOW_SIZE}), got {tuple(x_t.shape)}"
+    # Check sin/cos range is [-1, 1]
+    assert x_t[4].min() >= -1.01 and x_t[4].max() <= 1.01, "sin out of range"
+    assert x_t[5].min() >= -1.01 and x_t[5].max() <= 1.01, "cos out of range"
+    print(f"     Hour sin range: [{x_t[4].min():.2f}, {x_t[4].max():.2f}]")
+    print(f"     Hour cos range: [{x_t[5].min():.2f}, {x_t[5].max():.2f}]")
 
     print(f"\n{'=' * 60}")
     print("All tests passed — dataset module ready!")
