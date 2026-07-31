@@ -356,11 +356,14 @@ class ProposedModel(nn.Module):
         tcn_dilations: list = [1, 2, 4, 8],
         cbam_reduction: int = 16,
         dropout: float = 0.1,
+        seg_size: int = 96,
     ):
         super().__init__()
 
         self.window_size = window_size
-        self.center = window_size // 2  # seq2point index
+        self.center = window_size // 2      # seq2point index
+        self.seg_size = seg_size            # seq2seg segment size
+        self.seg_start = (window_size - seg_size) // 2  # segment start
         self.gru_hidden = gru_hidden
 
         # Total output of each parallel branch
@@ -497,14 +500,21 @@ class ProposedModel(nn.Module):
         merged = self.cbam(merged)
         merged = self.dyt_cbam(merged)  # (B, 480, 512)
 
-        # ---- Seq2point: center timestep ----
-        # (B, 480, 512) → (B, 512)
-        center = merged[:, self.center, :]
+        # ---- Seq2Seg: extract middle segment ----
+        # DU-NILM style: predict SEG_SIZE consecutive points
+        # instead of single center point (seq2point)
+        # (B, 480, 512) → (B, seg_size, 512)
+        segment = merged[:, self.seg_start:self.seg_start+self.seg_size, :]
 
-        # ---- Dense + Multi-task heads ----
-        # (B, 512) → (B, 128) → powers, states, gated
-        out = self.dense(center)
+        # ---- Dense + Multi-task heads (applied to each segment point) ----
+        # (B, seg_size, 512) → (B, seg_size, 128) → predictions
+        out = self.dense(segment)  # (B, seg_size, 128)
         powers, states, gated = self.heads(out)
+        # powers, states, gated: each (B, seg_size, N_app)
+        # Permute to (B, N_app, seg_size) for loss computation
+        powers = powers.permute(0, 2, 1)  # (B, N_app, seg_size)
+        states = states.permute(0, 2, 1)  # (B, N_app, seg_size)
+        gated  = gated.permute(0, 2, 1)   # (B, N_app, seg_size)
 
         return powers, states, gated
 
