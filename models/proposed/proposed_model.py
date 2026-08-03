@@ -502,21 +502,28 @@ class ProposedModel(nn.Module):
 
         # ---- Seq2Seg: extract middle segment ----
         # DU-NILM style: predict SEG_SIZE consecutive points
-        # instead of single center point (seq2point)
         # (B, 480, 512) → (B, seg_size, 512)
         segment = merged[:, self.seg_start:self.seg_start+self.seg_size, :]
 
-        # ---- Dense + Multi-task heads (applied to each segment point) ----
-        # (B, seg_size, 512) → (B, seg_size, 128) → predictions
-        out = self.dense(segment)  # (B, seg_size, 128)
-        powers, states, gated = self.heads(out)
-        # powers, states, gated: each (B, seg_size, N_app)
-        # Permute to (B, N_app, seg_size) for loss computation
-        powers = powers.permute(0, 2, 1)  # (B, N_app, seg_size)
-        states = states.permute(0, 2, 1)  # (B, N_app, seg_size)
-        gated  = gated.permute(0, 2, 1)   # (B, N_app, seg_size)
+        # ---- Dense + Multi-task heads ----
+        # Segment for power regression (96 points → more gradient signal)
+        out_seg = self.dense(segment)           # (B, seg_size, 128)
+        seg_p, seg_s, seg_g = self.heads(out_seg)
+        # Permute to (B, N_app, seg_size)
+        seg_p = seg_p.permute(0, 2, 1)
+        seg_s = seg_s.permute(0, 2, 1)
+        seg_g = seg_g.permute(0, 2, 1)
 
-        return powers, states, gated
+        # Center point for state classification (clean gradient)
+        center_feat = merged[:, self.center, :]  # (B, 512)
+        out_center = self.dense(center_feat)     # (B, 128)
+        ctr_p, ctr_s, ctr_g = self.heads(out_center)  # (B, N_app)
+
+        # Training: return segment power + center state
+        # seg_p: (B, N_app, seg_size) — power regression on segment
+        # ctr_s: (B, N_app)           — state classification on center
+        # seg_g: (B, N_app, seg_size) — gated output on segment
+        return seg_p, ctr_s, seg_g
 
     def count_parameters(self) -> int:
         """Return total number of trainable parameters."""
