@@ -295,17 +295,19 @@ class Decoder(nn.Module):
     """
     3-level decoder with skip connections from encoder.
     Progressively upsamples and refines features.
+    dims should be encoder dims [32, 64, 128] — decoder reverses internally.
     """
-    def __init__(self, dims: list = [128, 64, 32], dropout: float = 0.2):
+    def __init__(self, dims: list = [32, 64, 128], dropout: float = 0.2):
         super().__init__()
-        # Level 3→2: (128+128, 64)
-        self.level3 = DecoderLevel(dims[0], dims[0], dims[1], dropout)
-        # Level 2→1: (64+64, 32)
-        self.level2 = DecoderLevel(dims[1], dims[1], dims[2], dropout)
+        # Level 3→2: bottleneck(128) + E3 skip(128) → 64
+        self.level3 = DecoderLevel(dims[2], dims[2], dims[1], dropout)
+        # Level 2→1: D3(64) + E2 skip(64) → 32
+        self.level2 = DecoderLevel(dims[1], dims[1], dims[0], dropout)
         # Final refinement at level 1 (no upsampling)
+        # D2(32) + E1 skip(32) → 32
         self.level1 = nn.Sequential(
-            DWSConvBlock(dims[2] + dims[2], dims[2], kernel=5, dropout=dropout),
-            ResidualDWSConv(dims[2], kernel=5, dropout=dropout),
+            DWSConvBlock(dims[0] + dims[0], dims[0], kernel=5, dropout=dropout),
+            ResidualDWSConv(dims[0], kernel=5, dropout=dropout),
         )
 
     def forward(self, x, skips):
